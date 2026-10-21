@@ -1,8 +1,5 @@
-import { Inject, Injectable, NotFoundException } from '@nestjs/common';
-import { eq, desc } from 'drizzle-orm';
-import { DRIZZLE_DATABASE, type PostgresJsDatabase } from '@lark-apaas/fullstack-nestjs-core';
-
-import { task } from '../../database/schema';
+import { Injectable, NotFoundException, Logger } from '@nestjs/common';
+import { SupabaseService } from '../supabase/supabase.service';
 import type {
   Task,
   TaskListResponse,
@@ -11,88 +8,135 @@ import type {
   TaskPriority,
 } from '@shared/api.interface';
 
+const PRIORITY_MAP: Record<TaskPriority, string> = {
+  high: '高',
+  medium: '中',
+  low: '低',
+};
+
+const PRIORITY_REVERSE: Record<string, TaskPriority> = {
+  高: 'high',
+  中: 'medium',
+  低: 'low',
+};
+
+interface SupabaseTask {
+  id: number;
+  title: string;
+  priority: string;
+  completed: boolean;
+  created_at: string;
+}
+
 @Injectable()
 export class TaskService {
-  constructor(@Inject(DRIZZLE_DATABASE) private readonly db: PostgresJsDatabase) {}
+  private readonly logger = new Logger(TaskService.name);
+
+  constructor(private readonly supabaseService: SupabaseService) {}
+
+  private get client() {
+    return this.supabaseService.client;
+  }
+
+  private mapRow(row: SupabaseTask): Task {
+    return {
+      id: String(row.id),
+      title: row.title,
+      priority: PRIORITY_REVERSE[row.priority] ?? 'medium',
+      completed: row.completed,
+      createdAt: row.created_at,
+    };
+  }
 
   async list(priority?: TaskPriority): Promise<TaskListResponse> {
-    const query = priority
-      ? this.db.select().from(task).where(eq(task.priority, priority)).orderBy(desc(task.createdAt))
-      : this.db.select().from(task).orderBy(desc(task.createdAt));
+    let query = this.client
+      .from('tasks')
+      .select('id, title, priority, completed, created_at')
+      .order('created_at', { ascending: false });
 
-    const rows = await query;
-    const items: Task[] = rows.map((row) => ({
-      id: row.id,
-      title: row.title,
-      priority: row.priority as TaskPriority,
-      completed: row.completed,
-      createdAt: row.createdAt.toISOString(),
-    }));
-    return { items };
+    if (priority) {
+      query = query.eq('priority', PRIORITY_MAP[priority]);
+    }
+
+    const { data, error } = await query;
+    if (error) {
+      const errInfo = JSON.stringify({ message: error.message, code: error.code, details: error.details, hint: error.hint });
+      this.logger.error(`查询任务列表失败: ${errInfo}`);
+      throw error;
+    }
+
+    const rows = (data as SupabaseTask[]) || [];
+    return { items: rows.map((row) => this.mapRow(row)) };
   }
 
   async create(dto: CreateTaskRequest): Promise<Task> {
-    const rows = await this.db
-      .insert(task)
-      .values({
+    const { data, error } = await this.client
+      .from('tasks')
+      .insert({
         title: dto.title,
-        priority: dto.priority,
+        priority: PRIORITY_MAP[dto.priority],
         completed: false,
       })
-      .returning();
+      .select()
+      .single();
 
-    const row = rows[0];
-    return {
-      id: row.id,
-      title: row.title,
-      priority: row.priority as TaskPriority,
-      completed: row.completed,
-      createdAt: row.createdAt.toISOString(),
-    };
+    if (error) {
+      const errInfo = JSON.stringify({ message: error.message, code: error.code, details: error.details, hint: error.hint });
+      this.logger.error(`创建任务失败: ${errInfo}`);
+      throw error;
+    }
+
+    return this.mapRow(data as SupabaseTask);
   }
 
   async update(id: string, dto: UpdateTaskRequest): Promise<Task> {
-    const patch: Partial<typeof task.$inferInsert> = {};
+    const patch: Record<string, unknown> = {};
     if (dto.title !== undefined) patch.title = dto.title;
-    if (dto.priority !== undefined) patch.priority = dto.priority;
+    if (dto.priority !== undefined) patch.priority = PRIORITY_MAP[dto.priority];
     if (dto.completed !== undefined) patch.completed = dto.completed;
 
     if (Object.keys(patch).length === 0) {
-      const existing = await this.db.select().from(task).where(eq(task.id, id));
-      if (existing.length === 0) throw new NotFoundException('任务不存在');
-      const row = existing[0];
-      return {
-        id: row.id,
-        title: row.title,
-        priority: row.priority as TaskPriority,
-        completed: row.completed,
-        createdAt: row.createdAt.toISOString(),
-      };
+      const { data, error } = await this.client
+        .from('tasks')
+        .select()
+        .eq('id', Number(id))
+        .single();
+      if (error || !data) throw new NotFoundException('任务不存在');
+      return this.mapRow(data as SupabaseTask);
     }
 
-    patch.updatedAt = new Date();
+    const { data, error } = await this.client
+      .from('tasks')
+      .update(patch)
+      .eq('id', Number(id))
+      .select()
+      .single();
 
-    const rows = await this.db
-      .update(task)
-      .set(patch)
-      .where(eq(task.id, id))
-      .returning();
+    if (error) {
+      const errInfo = JSON.stringify({ message: error.message, code: error.code, details: error.details, hint: error.hint });
+      this.logger.error(`更新任务失败: ${errInfo}`);
+      if (error.code === 'PGRST116') throw new NotFoundException('任务不存在');
+      throw error;
+    }
 
-    if (rows.length === 0) throw new NotFoundException('任务不存在');
-
-    const row = rows[0];
-    return {
-      id: row.id,
-      title: row.title,
-      priority: row.priority as TaskPriority,
-      completed: row.completed,
-      createdAt: row.createdAt.toISOString(),
-    };
+    return this.mapRow(data as SupabaseTask);
   }
 
   async remove(id: string): Promise<{ success: boolean }> {
-    const rows = await this.db.delete(task).where(eq(task.id, id)).returning({ id: task.id });
-    if (rows.length === 0) throw new NotFoundException('任务不存在');
+    const { data, error } = await this.client
+      .from('tasks')
+      .delete()
+      .eq('id', Number(id))
+      .select('id');
+
+    if (error) {
+      const errInfo = JSON.stringify({ message: error.message, code: error.code, details: error.details, hint: error.hint });
+      this.logger.error(`删除任务失败: ${errInfo}`);
+      if (error.code === 'PGRST116') throw new NotFoundException('任务不存在');
+      throw error;
+    }
+
+    if (!data || data.length === 0) throw new NotFoundException('任务不存在');
     return { success: true };
   }
 }

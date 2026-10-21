@@ -5,6 +5,7 @@ import { PlatformModule } from '@lark-apaas/fullstack-nestjs-core';
 import { GlobalExceptionFilter } from './common/filters/exception.filter';
 import { ViewModule } from './modules/view/view.module';
 import { TaskModule } from './modules/task/task.module';
+import { SupabaseModule } from './modules/supabase/supabase.module';
 
 @Module({
   imports: [
@@ -12,6 +13,7 @@ import { TaskModule } from './modules/task/task.module';
     PlatformModule.forRoot(),
     // ====== @route-section: business-modules START ======
     // Place all business modules here.Do NOT add fallback modules here.
+    SupabaseModule,
     TaskModule,
     // ====== @route-section: business-modules END ======
 
