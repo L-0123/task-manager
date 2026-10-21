@@ -1,9 +1,8 @@
-import { createTailwindPresetOfSimple } from '@lark-apaas/fullstack-presets';
+import typography from '@tailwindcss/typography';
 
 export default {
-  presets: [createTailwindPresetOfSimple()],
   content: [
     './client/src/**/*.{ts,tsx,css}',
   ],
-  plugins: [],
-}
+  plugins: [typography],
+};

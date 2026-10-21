@@ -3,7 +3,6 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
 import { toast } from 'sonner';
-import { logger } from '@lark-apaas/client-toolkit/logger';
 import { Check, Trash2, Plus } from 'lucide-react';
 
 import { Button } from '@client/src/components/ui/button';
@@ -68,7 +67,7 @@ const TaskManagerPage = () => {
       const res = await tasksApi.getTasks(priority);
       setTasks(res.items);
     } catch (error) {
-      logger.error('加载任务失败', error);
+      console.error('加载任务失败', error);
       toast.error('加载任务失败');
     } finally {
       setLoading(false);
@@ -89,7 +88,7 @@ const TaskManagerPage = () => {
       toast.success('任务创建成功');
       loadTasks(filter);
     } catch (error) {
-      logger.error('创建任务失败', error);
+      console.error('创建任务失败', error);
       toast.error('创建任务失败');
     }
   };
@@ -100,7 +99,7 @@ const TaskManagerPage = () => {
       toast.success(task.completed ? '已标记为未完成' : '已标记为完成');
       loadTasks(filter);
     } catch (error) {
-      logger.error('更新任务失败', error);
+      console.error('更新任务失败', error);
       toast.error('更新任务失败');
     }
   };
@@ -111,7 +110,7 @@ const TaskManagerPage = () => {
       toast.success('任务已删除');
       loadTasks(filter);
     } catch (error) {
-      logger.error('删除任务失败', error);
+      console.error('删除任务失败', error);
       toast.error('删除任务失败');
     }
   };

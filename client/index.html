@@ -5,19 +5,21 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <link rel="icon" href="/favicon.svg">
-  <title>妙搭</title>
+  <title>任务管理</title>
   <script>
-    try {
-      window.__platform__ = JSON.parse('{{{__platform__}}}');
-    } catch (e) {
-      console.error('Failed to parse __platform__', e);
-    }
+    // 兜底：给 @lark-apaas/client-toolkit 组件提供最小化的平台配置
+    window.__platform__ = {
+      appId: '',
+      env: 'production',
+      tenantId: '',
+      userId: '',
+    };
   </script>
 </head>
 
 <body>
   <div id="root"></div>
-  <script type="module" src="/client/src/index.tsx"></script>
+  <script type="module" src="/src/index.tsx"></script>
 </body>
 
 </html>
