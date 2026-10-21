@@ -1,6 +1,8 @@
 import { logger } from '@lark-apaas/client-toolkit/logger';
 import { axiosForBackend } from '@lark-apaas/client-toolkit/utils/getAxiosForBackend';
 
+export * as tasksApi from './tasks';
+
 
 // Add more API functions here, use axios instance (`axiosForBackend`) to make requests.
 // 
